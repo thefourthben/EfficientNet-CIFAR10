@@ -15,6 +15,7 @@ import onnx
 import onnxruntime
 from PIL import Image
 import collections
+from models import utils
 
 
 class training():
@@ -31,20 +32,30 @@ class training():
         self.n_epoch = 3
         self.loss = t.nn.CrossEntropyLoss()
         self.factor = 0.5
-        self.classes = None
-        BlockArgs = collections.namedtuple('BlockArgs', [
-            'kernel_size', 'num_repeat', 'input_filters', 'output_filters',
-            'expand_ratio', 'id_skip', 'strides', 'se_ratio'
-        ])
-        self.block = argument_block = [ 
-            BlockArgs(kernel_size=3, num_repeat=1, input_filters=32, output_filters=16, expand_ratio=1, id_skip=True, strides=[1, 1], se_ratio=0.25),
-            BlockArgs(kernel_size=3, num_repeat=2, input_filters=16, output_filters=24, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
-            BlockArgs(kernel_size=5, num_repeat=2, input_filters=24, output_filters=40, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
-            BlockArgs(kernel_size=3, num_repeat=3, input_filters=40, output_filters=80, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
-            BlockArgs(kernel_size=5, num_repeat=3, input_filters=80, output_filters=112, expand_ratio=6, id_skip=True, strides=[1, 1], se_ratio=0.25),
-            BlockArgs(kernel_size=5, num_repeat=4, input_filters=112, output_filters=192, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
-            BlockArgs(kernel_size=3, num_repeat=1, input_filters=192, output_filters=320, expand_ratio=6, id_skip=True, strides=[1, 1], se_ratio=0.25)
+        self.classes = ('plane', 'car', 'bird', 'cat', 'deer',
+               'dog', 'frog', 'horse', 'ship', 'truck')        utils.BlockArgs
+        self.block = [ 
+            utils.BlockArgs(kernel_size=3, num_repeat=1, input_filters=32, output_filters=16, expand_ratio=1, id_skip=True, strides=[1, 1], se_ratio=0.25),
+            utils.BlockArgs(kernel_size=3, num_repeat=2, input_filters=16, output_filters=24, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
+            utils.BlockArgs(kernel_size=5, num_repeat=2, input_filters=24, output_filters=40, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
+            utils.BlockArgs(kernel_size=3, num_repeat=3, input_filters=40, output_filters=80, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
+            utils.BlockArgs(kernel_size=5, num_repeat=3, input_filters=80, output_filters=112, expand_ratio=6, id_skip=True, strides=[1, 1], se_ratio=0.25),
+            utils.BlockArgs(kernel_size=5, num_repeat=4, input_filters=112, output_filters=192, expand_ratio=6, id_skip=True, strides=[2, 2], se_ratio=0.25),
+            utils.BlockArgs(kernel_size=3, num_repeat=1, input_filters=192, output_filters=320, expand_ratio=6, id_skip=True, strides=[1, 1], se_ratio=0.25)
             ]
+        self.globalparm = utils.GlobalParams(
+            width_coefficient=None,
+            depth_coefficient=None,
+            image_size=None,
+            dropout_rate=0.2,
+
+            num_classes=10,
+            batch_norm_momentum=0.99,
+            batch_norm_epsilon=1e-3,
+            drop_connect_rate=0.2,
+            depth_divisor=8,
+            min_depth=None
+            )
 
     def preproc(self):
         transform_train = transforms.Compose([
@@ -52,13 +63,19 @@ class training():
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
+
+        # Loading and getting the trainset
         self.trainset = tv.CIFAR10(root='./data', train=True,
                             download=True, transform=transform_train)
         length = int(len(self.trainset) * 0.9)
         self.trainset, self.valset = t.utils.data.random_split(self.trainset, [length, len(self.trainset) - length])
         self.trainloader = t.utils.data.DataLoader(self.trainset, batch_size=80,
                                             shuffle=True, num_workers=2)
+        
+        # Creating validation loader
         self.valloader = t.utils.data.DataLoader(self.valset, batch_size= 32, shuffle=True, num_workers=2)
+
+        # Creating and loading the test set
         self.testset = tv.CIFAR10(root='./data', train=False,
                             download=True, transform=transform_train)
         self.testloader = t.utils.data.DataLoader(self.testset, batch_size=80,
@@ -66,10 +83,9 @@ class training():
 
     def train(self):
         self.preproc()
-        self.classes = ('plane', 'car', 'bird', 'cat', 'deer',
-               'dog', 'frog', 'horse', 'ship', 'truck')
+        
         # Getting the Model
-        model = self.whichmodel(blocks_args=self.block, global_params=self.classes)
+        model = self.whichmodel(blocks_args=self.block, global_params=self.globalparm)
         # Unfreezing the model parameters
         for param in model.parameters():
             param.requires_grad = True
