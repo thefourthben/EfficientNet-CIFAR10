@@ -1,2 +1,1 @@
-TODO:
-    1. Change the parameters to maximize accuracy (Batchsize, LR, LR Decay, Potentially: Optimizer and LR scheduler)
+This is my first attempt to implement a Deep Learning Model. I choose to use the EfficientNet and MobileNet Series as an introduction. The database that is used is CIFAR-10 and all code is done in Python and Pytorch. 
